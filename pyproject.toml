@@ -1,0 +1,10 @@
+[project]
+name = "labcollector"
+version = "0.1.0"
+description = "Collects lab-run output files into an organized, per-run folder structure."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

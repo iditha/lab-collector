@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Lab Collector runtime data (config, database, logs, collected files) and demo data
+data/
+demo/
