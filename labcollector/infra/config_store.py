@@ -50,7 +50,9 @@ def load(path: Path) -> AppConfig:
     except FileNotFoundError:
         raise ConfigError(f"Config file not found: {path}") from None
     except UnicodeDecodeError:
-        raise ConfigError(f"{path.name} is not saved as UTF-8. Save it as UTF-8 and try again.") from None
+        raise ConfigError(
+            f"{path.name} is not saved as UTF-8. Save it as UTF-8 and try again."
+        ) from None
     except OSError as error:
         raise ConfigError(f"Can't read {path}: {error.strerror or error}") from error
 
@@ -70,7 +72,9 @@ def load(path: Path) -> AppConfig:
 
 def save(config: AppConfig, path: Path) -> None:
     data = config.model_dump(mode="json", exclude_none=True)
-    text = HEADER + yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=None)
+    text = HEADER + yaml.safe_dump(
+        data, sort_keys=False, allow_unicode=True, default_flow_style=None
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(".tmp")
     temp.write_text(text, encoding="utf-8")

@@ -30,7 +30,7 @@ def test_load_valid_file(tmp_path):
     rule = config.sources[0].rules[0]
     assert config.udp.host == "192.168.1.50"
     assert rule.extensions == [".csv", ".log"]  # normalized
-    assert rule.max_age_minutes is None          # default
+    assert rule.max_age_minutes is None  # default
 
 
 def test_save_then_load_gives_same_config(tmp_path):
@@ -82,13 +82,31 @@ def test_expected_cannot_exceed_newest():
 def test_duplicate_source_names_rejected():
     rule = Rule(name="r", category="c")
     with pytest.raises(ValueError, match="unique"):
-        AppConfig(output_root="x", sources=[Source(name="A", path="p", rules=[rule]),
-                                            Source(name="a", path="q", rules=[rule])])
+        AppConfig(
+            output_root="x",
+            sources=[
+                Source(name="A", path="p", rules=[rule]),
+                Source(name="a", path="q", rules=[rule]),
+            ],
+        )
 
 
-@pytest.mark.parametrize("name, ok", [
-    ("logs", True), ("Run 7", True), ("bad/name", False), ("a:b", False),
-    ("   ", False), ("trailing.", False), (" lead", False),
-])
+@pytest.mark.parametrize(
+    "name, ok",
+    [
+        ("logs", True),
+        ("Run 7", True),
+        ("bad/name", False),
+        ("a:b", False),
+        ("   ", False),
+        ("trailing.", False),
+        (" lead", False),
+        ("CON", False),
+        ("nul.txt", False),
+        ("com1", False),
+        ("Console", True),
+        ("LPT10", True),
+    ],
+)
 def test_folder_name_problem(name, ok):
     assert (folder_name_problem(name) is None) == ok

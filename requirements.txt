@@ -5,4 +5,5 @@ pydantic==2.14.3             # config validation with readable errors
 
 # Development / packaging
 pytest==9.2.0
+ruff==0.17.5                 # linter + formatter (same tool as the VS Code extension)
 pyinstaller==6.22.3

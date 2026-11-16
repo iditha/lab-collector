@@ -30,15 +30,28 @@ class FileInfo:
     mtime: float  # last modified, in seconds since 1970 (as returned by os.stat)
 
 
+# Temporary files other programs keep next to open documents; never real lab output.
+TEMP_FILE_PREFIXES = (
+    "~$",  # Microsoft Office lock file, e.g. ~$report.xlsx while report.xlsx is open
+    ".~lock.",  # LibreOffice lock file
+)
+
+
+def is_temporary(name: str) -> bool:
+    return name.startswith(TEMP_FILE_PREFIXES)
+
+
 def list_files(folder: Path, recursive: bool = False) -> list[FileInfo]:
-    """All files in ``folder`` (and its subfolders if ``recursive``)."""
+    """All files in ``folder`` (and its subfolders if ``recursive``), except temporary files."""
     if not folder.is_dir():
-        raise SourceError(f"Source folder not found: {folder}")
+        raise SourceError(f"Source folder not found or not reachable: {folder}")
 
     files = []
     try:
         candidates = folder.rglob("*") if recursive else folder.iterdir()
         for path in candidates:
+            if is_temporary(path.name):
+                continue
             try:
                 if not path.is_file():
                     continue
@@ -48,13 +61,15 @@ def list_files(folder: Path, recursive: bool = False) -> list[FileInfo]:
                 continue
             files.append(FileInfo(path, stat.st_size, stat.st_mtime))
     except OSError as error:
-        raise SourceError(f"Can't read source folder {folder}: {error.strerror or error}") from error
+        raise SourceError(
+            f"Can't read source folder {folder}: {error.strerror or error}"
+        ) from error
     return files
 
 
 # --- Filters: (files, rule, now) -> files that pass -----------------------------
 
-Filter = Callable[[list[FileInfo], Rule, float], list[FileInfo]]
+type Filter = Callable[[list[FileInfo], Rule, float], list[FileInfo]]
 
 
 def by_prefix(files: list[FileInfo], rule: Rule, now: float) -> list[FileInfo]:

@@ -9,10 +9,10 @@ from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
-if getattr(sys, "frozen", False):                        # running as LabCollector.exe (PyInstaller)
+if getattr(sys, "frozen", False):  # running as LabCollector.exe (PyInstaller)
     APP_DIR = Path(sys.executable).resolve().parent
-    RESOURCE_DIR = Path(sys._MEIPASS) / "labcollector"   # files bundled inside the exe
-else:                                                     # running from source
+    RESOURCE_DIR = Path(sys._MEIPASS) / "labcollector"  # files bundled inside the exe
+else:  # running from source
     APP_DIR = PACKAGE_DIR.parent
     RESOURCE_DIR = PACKAGE_DIR
 

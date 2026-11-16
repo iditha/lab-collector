@@ -5,9 +5,16 @@ every value and reports exactly which setting is wrong. ``extra="forbid"`` turns
 misspelled setting name into an error instead of silently ignoring it.
 """
 
+from typing import Self
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 INVALID_NAME_CHARS = set('<>:"/\\|?*')
+
+# Names Windows reserves for devices; a folder can't have them, with or without an extension.
+RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL"} | {
+    f"{p}{n}" for p in ("COM", "LPT") for n in range(1, 10)
+}
 
 
 def folder_name_problem(name: str) -> str | None:
@@ -19,6 +26,8 @@ def folder_name_problem(name: str) -> str | None:
         return "must not contain " + " ".join(bad)
     if name != name.strip() or name.endswith("."):
         return "must not start or end with a space, or end with a dot"
+    if name.split(".")[0].upper() in RESERVED_NAMES:
+        return f"'{name}' is reserved by Windows"
     return None
 
 
@@ -28,12 +37,12 @@ class Rule(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
-    category: str                                             # subfolder in the collection
-    prefix: str = ""                                          # file name starts with (any case)
-    extensions: list[str] = []                                # e.g. [.csv, .log]; empty = any
-    newest: int | None = Field(default=None, ge=1)            # keep only the N newest files
-    max_age_minutes: float | None = Field(default=None, gt=0) # only files modified recently
-    expected: int = Field(default=1, ge=0)                    # fewer matches = files missing
+    category: str  # subfolder in the collection
+    prefix: str = ""  # file name starts with (any case)
+    extensions: list[str] = []  # e.g. [.csv, .log]; empty = any
+    newest: int | None = Field(default=None, ge=1)  # keep only the N newest files
+    max_age_minutes: float | None = Field(default=None, gt=0)  # only files modified recently
+    expected: int = Field(default=1, ge=0)  # fewer matches = files missing
 
     @field_validator("category")
     @classmethod
@@ -55,9 +64,11 @@ class Rule(BaseModel):
         return normalized
 
     @model_validator(mode="after")
-    def _expected_fits_newest(self) -> "Rule":
+    def _expected_fits_newest(self) -> Self:
         if self.newest is not None and self.expected > self.newest:
-            raise ValueError(f"expected ({self.expected}) can't be more than newest ({self.newest})")
+            raise ValueError(
+                f"expected ({self.expected}) can't be more than newest ({self.newest})"
+            )
         return self
 
 
@@ -68,7 +79,7 @@ class Source(BaseModel):
 
     name: str = Field(min_length=1)
     path: str = Field(min_length=1)
-    recursive: bool = False                                   # also scan subfolders
+    recursive: bool = False  # also scan subfolders
     rules: list[Rule] = Field(min_length=1)
 
     @field_validator("rules")
@@ -93,7 +104,7 @@ class AppConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    output_root: str = Field(min_length=1)                    # where collected files are copied
+    output_root: str = Field(min_length=1)  # where collected files are copied
     udp: UdpSettings = Field(default_factory=UdpSettings)
     sources: list[Source] = []
 

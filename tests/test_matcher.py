@@ -37,15 +37,31 @@ def match(folder, **rule_fields):
 
 
 def test_no_filters_returns_all_files_newest_first(source):
-    assert match(source) == ["other.csv", "MEAS_004.log", "meas_003.CSV", "MEAS_002.csv", "MEAS_001.csv"]
+    assert match(source) == [
+        "other.csv",
+        "MEAS_004.log",
+        "meas_003.CSV",
+        "MEAS_002.csv",
+        "MEAS_001.csv",
+    ]
 
 
 def test_prefix_is_not_case_sensitive(source):
-    assert match(source, prefix="MEAS_") == ["MEAS_004.log", "meas_003.CSV", "MEAS_002.csv", "MEAS_001.csv"]
+    assert match(source, prefix="MEAS_") == [
+        "MEAS_004.log",
+        "meas_003.CSV",
+        "MEAS_002.csv",
+        "MEAS_001.csv",
+    ]
 
 
 def test_extension_is_not_case_sensitive(source):
-    assert match(source, extensions=["csv"]) == ["other.csv", "meas_003.CSV", "MEAS_002.csv", "MEAS_001.csv"]
+    assert match(source, extensions=["csv"]) == [
+        "other.csv",
+        "meas_003.CSV",
+        "MEAS_002.csv",
+        "MEAS_001.csv",
+    ]
 
 
 def test_extension_with_two_dots(tmp_path):
@@ -63,7 +79,10 @@ def test_newest_keeps_n_most_recent(source):
 
 
 def test_rules_combine(source):
-    assert match(source, prefix="meas_", extensions=[".csv"], newest=2) == ["meas_003.CSV", "MEAS_002.csv"]
+    assert match(source, prefix="meas_", extensions=[".csv"], newest=2) == [
+        "meas_003.CSV",
+        "MEAS_002.csv",
+    ]
 
 
 def test_no_match_returns_empty_list(source):
@@ -77,6 +96,13 @@ def test_empty_folder(tmp_path):
 def test_missing_folder_raises_source_error(tmp_path):
     with pytest.raises(SourceError, match="not found"):
         list_files(tmp_path / "missing")
+
+
+def test_office_and_libreoffice_lock_files_are_skipped(tmp_path):
+    make_file(tmp_path, "report.xlsx", minutes_old=1)
+    make_file(tmp_path, "~$report.xlsx", minutes_old=1)
+    make_file(tmp_path, ".~lock.report.xlsx#", minutes_old=1)
+    assert names(list_files(tmp_path)) == ["report.xlsx"]
 
 
 def test_subfolders_only_scanned_when_recursive(tmp_path):
