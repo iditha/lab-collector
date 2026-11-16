@@ -80,7 +80,8 @@ def to_html(collection: Collection, run: Run) -> str:
         f"<div class='banner' style='background:{background};color:{color}'>"
         f"<h1>{TITLES[collection.status]}</h1><p>{_e(headline(collection))}</p></div>",
         f"<p class='meta'>Run <b dir='auto'>{_e(run.name)}</b> &middot; "
-        f"started {_e(collection.started_at)} &middot; finished {_e(collection.finished_at)}</p>",
+        f"started {_e(_readable(collection.started_at))} &middot; "
+        f"finished {_e(_readable(collection.finished_at))}</p>",
         _tiles(counts),
     ]
 
@@ -172,7 +173,7 @@ def _run_details(run: Run, collection: Collection) -> str:
 
 def human_size(size: int | None) -> str:
     if size is None:
-        return "&ndash;"
+        return "–"  # a plain dash character: works in HTML and in the UI
     if size < 1024:
         return f"{size} bytes"
     value = size / 1024
@@ -181,6 +182,11 @@ def human_size(size: int | None) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} GB"
+
+
+def _readable(iso_time: str) -> str:
+    """'2026-11-16T15:05:04' -> '2026-11-16 15:05:04'."""
+    return iso_time.replace("T", " ")
 
 
 def _files(count: int) -> str:
