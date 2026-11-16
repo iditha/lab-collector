@@ -196,3 +196,14 @@ def test_free_path(tmp_path):
     (tmp_path / "a (2).txt").write_text("x")
     assert free_path(tmp_path / "a.txt").name == "a (3).txt"
     assert free_path(tmp_path / "b.txt").name == "b.txt"
+
+
+def test_run_json_write_failure_is_reported_but_not_fatal(repository, run, tmp_path, sources):
+    # A folder named run.json where the file should go makes writing it fail.
+    (tmp_path / "out" / run.name / "run.json").mkdir(parents=True)
+    config = make_config(tmp_path, sources, [Rule(name="Meas", category="m", prefix="MEAS_")])
+    collection = collect(repository, run, config)
+
+    assert collection.status == CollectionStatus.SUCCESS  # the files themselves were fine
+    assert any("Couldn't write run.json" in m for m in collection.messages)
+    assert repository.get_collection(collection.id) is not None  # still saved to history
