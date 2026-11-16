@@ -222,3 +222,6 @@ __marimo__/
 # Lab Collector runtime data (config, database, logs, collected files) and demo data
 data/
 demo/
+
+# Claude Code: personal settings stay local; shared agents in .claude/agents/ are committed
+.claude/settings.local.json
