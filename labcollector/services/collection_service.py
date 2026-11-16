@@ -75,6 +75,10 @@ class CollectionService:
     def __init__(self, repository: Repository):
         self._repository = repository
 
+    def history(self, run_id: int) -> list[Collection]:
+        """All collections of a run, newest first, with their file results."""
+        return self._repository.list_collections(run_id)
+
     def collect(
         self,
         run: Run,

@@ -1,6 +1,6 @@
 """The main window: the list of runs on the left, the selected run on the right."""
 
-from datetime import datetime
+from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QSplitter,
     QStackedWidget,
@@ -18,18 +19,35 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from labcollector.config_models import AppConfig
+from labcollector.infra.config_store import ConfigError
 from labcollector.records import Run
+from labcollector.services.collection_service import CollectionService
 from labcollector.services.run_service import RunService
+from labcollector.ui.collect_dialog import CollectDialog
 from labcollector.ui.details_tab import DetailsTab
+from labcollector.ui.files_tab import FilesTab
+from labcollector.ui.helpers import format_date
+from labcollector.ui.history_tab import HistoryTab
 from labcollector.ui.run_form import RunDialog
 
 EMPTY_PAGE, RUN_PAGE = 0, 1
+DETAILS_TAB, FILES_TAB, HISTORY_TAB = 0, 1, 2
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, runs: RunService):
+    def __init__(
+        self,
+        run_service: RunService,
+        collection_service: CollectionService,
+        load_config: Callable[[], AppConfig],
+    ):
+        """``load_config`` reads config.yaml; it's called before every collection so that
+        edits made outside the app are picked up. It raises ConfigError if the file is bad."""
         super().__init__()
-        self._runs = runs
+        self._run_service = run_service
+        self._collection_service = collection_service
+        self._load_config = load_config
         self._current: Run | None = None
         self.setWindowTitle("Lab Collector")
         self.resize(1100, 700)
@@ -109,12 +127,18 @@ class MainWindow(QMainWindow):
         header.addLayout(titles)
         header.addStretch()
         header.addWidget(edit_button, alignment=Qt.AlignmentFlag.AlignTop)
+        collect_button = QPushButton("Collect now")
+        collect_button.setObjectName("primary")
+        collect_button.clicked.connect(self._collect)
+        header.addWidget(collect_button, alignment=Qt.AlignmentFlag.AlignTop)
 
         self.details = DetailsTab()
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.details, "Details")
-        self.tabs.addTab(_placeholder("Collected files will appear here."), "Files")
-        self.tabs.addTab(_placeholder("Past collections will appear here."), "History")
+        self.files = FilesTab()
+        self.history = HistoryTab()
+        self.tabs.addTab(self.details, "Details")  # DETAILS_TAB
+        self.tabs.addTab(self.files, "Files")  # FILES_TAB
+        self.tabs.addTab(self.history, "History")  # HISTORY_TAB
 
         page = QWidget()
         page.setObjectName("runPage")
@@ -131,7 +155,7 @@ class MainWindow(QMainWindow):
         """Reload the list (keeping the search filter) and select a run if possible."""
         if select_id is None and self._current:
             select_id = self._current.id
-        runs = self._runs.search(self.search.text().strip())
+        runs = self._run_service.search(self.search.text().strip())
 
         self.run_list.blockSignals(True)  # don't react to selection changes while rebuilding
         self.run_list.clear()
@@ -150,7 +174,7 @@ class MainWindow(QMainWindow):
     def _on_run_selected(
         self, item: QListWidgetItem | None, _previous: QListWidgetItem | None = None
     ) -> None:
-        run = self._runs.get(item.data(Qt.ItemDataRole.UserRole)) if item else None
+        run = self._run_service.get(item.data(Qt.ItemDataRole.UserRole)) if item else None
         if run is None:
             self._show_empty()
             return
@@ -159,7 +183,15 @@ class MainWindow(QMainWindow):
         parts = [run.operator, run.location, f"created {format_date(run.created_at)}"]
         self.run_subtitle.setText("  ·  ".join(part for part in parts if part))
         self.details.show_run(run)
+        self._show_collections(run)
         self.pages.setCurrentIndex(RUN_PAGE)
+
+    def _show_collections(self, run: Run) -> None:
+        collections = self._collection_service.history(run.id)
+        self.files.show_collections(collections)
+        self.history.show_history(run, collections)
+        count = f" ({len(collections)})" if collections else ""
+        self.tabs.setTabText(HISTORY_TAB, f"History{count}")
 
     def _show_empty(self) -> None:
         self._current = None
@@ -172,7 +204,7 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentIndex(EMPTY_PAGE)
 
     def _new_run(self) -> None:
-        dialog = RunDialog(self._runs, parent=self)
+        dialog = RunDialog(self._run_service, parent=self)
         if dialog.exec():
             self.search.clear()  # make sure the new run is visible in the list
             self.refresh_runs(select_id=dialog.saved_run.id)
@@ -180,21 +212,20 @@ class MainWindow(QMainWindow):
     def _edit_run(self) -> None:
         if self._current is None:
             return
-        dialog = RunDialog(self._runs, self._current, parent=self)
+        dialog = RunDialog(self._run_service, self._current, parent=self)
         if dialog.exec():
             self.refresh_runs(select_id=self._current.id)
 
-
-def format_date(iso_text: str) -> str:
-    """'2026-11-16T11:13:09' -> '16 Nov 2026, 11:13'."""
-    try:
-        return datetime.fromisoformat(iso_text).strftime("%d %b %Y, %H:%M")
-    except ValueError:
-        return iso_text
-
-
-def _placeholder(text: str) -> QWidget:
-    label = QLabel(text)
-    label.setObjectName("muted")
-    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    return label
+    def _collect(self) -> None:
+        if self._current is None:
+            return
+        try:
+            config = self._load_config()  # re-read now, to pick up edits made outside the app
+        except ConfigError as error:
+            QMessageBox.warning(self, "Configuration problem", str(error))
+            return
+        dialog = CollectDialog(self._collection_service, self._current, config, parent=self)
+        dialog.exec()
+        if dialog.collection is not None:
+            self._show_collections(self._current)
+            self.tabs.setCurrentIndex(FILES_TAB)

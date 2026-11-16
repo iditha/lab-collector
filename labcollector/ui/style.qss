@@ -97,7 +97,7 @@ QTabBar::tab {
 QTabBar::tab:selected {
     color: #1f2328;
     border-bottom: 2px solid #0b6bcb;
-    font-weight: 600;
+    /* no bold here: Qt sizes tabs for normal text, so bold text would be cut off */
 }
 
 /* --- Text styles -------------------------------------------------------- */

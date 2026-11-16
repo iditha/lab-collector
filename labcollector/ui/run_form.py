@@ -20,9 +20,11 @@ from labcollector.services.run_service import RunService, RunValidationError
 class RunDialog(QDialog):
     """Create a run (``run=None``) or edit one. After Save, ``saved_run`` holds the result."""
 
-    def __init__(self, runs: RunService, run: Run | None = None, parent: QWidget | None = None):
+    def __init__(
+        self, run_service: RunService, run: Run | None = None, parent: QWidget | None = None
+    ):
         super().__init__(parent)
-        self._runs = runs
+        self._run_service = run_service
         self._editing = run
         self.saved_run: Run | None = None
         self.setWindowTitle("Edit run" if run else "New run")
@@ -87,9 +89,9 @@ class RunDialog(QDialog):
         try:
             if self._editing:
                 run = replace(self._editing, **fields)  # a copy that keeps id and created_at
-                self._runs.update(run)
+                self._run_service.update(run)
             else:
-                run = self._runs.create(Run(**fields))
+                run = self._run_service.create(Run(**fields))
         except RunValidationError as error:
             self.error.setText(str(error))  # keep the dialog open so the user can fix it
             self.error.show()
