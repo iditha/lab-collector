@@ -1,0 +1,129 @@
+/* Lab Collector stylesheet (Qt Style Sheets: CSS-like rules for Qt widgets).
+   #name selects a widget by objectName, [prop="x"] by a dynamic property. */
+
+QWidget {
+    color: #1f2328;
+}
+
+QMainWindow, QDialog, #runPage {
+    background: #ffffff;
+}
+
+/* --- Sidebar ------------------------------------------------------------- */
+
+#sidebar {
+    background: #f6f8fa;
+    border-right: 1px solid #d1d9e0;
+}
+
+QListWidget {
+    background: transparent;
+    border: none;
+    outline: none; /* no dotted focus rectangle */
+}
+
+QListWidget::item {
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 1px 0;
+}
+
+QListWidget::item:hover {
+    background: #eaeef2;
+}
+
+QListWidget::item:selected {
+    background: #ddeaf8;
+    color: #0b4f9c;
+}
+
+/* --- Inputs ------------------------------------------------------------- */
+
+QLineEdit, QPlainTextEdit {
+    background: #ffffff;
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    padding: 5px 8px;
+    selection-background-color: #0b6bcb;
+}
+
+QLineEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid #0b6bcb;
+}
+
+QLineEdit:disabled {
+    background: #f6f8fa;
+    color: #59636e;
+}
+
+/* --- Buttons ------------------------------------------------------------ */
+
+QPushButton {
+    background: #f6f8fa;
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+
+QPushButton:hover {
+    background: #eaeef2;
+}
+
+QPushButton#primary {
+    background: #0b6bcb;
+    border-color: #0b6bcb;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#primary:hover {
+    background: #0a5cad;
+}
+
+/* --- Tabs --------------------------------------------------------------- */
+
+QTabWidget::pane {
+    border: none;
+    border-top: 1px solid #d1d9e0;
+}
+
+QTabBar::tab {
+    background: transparent;
+    padding: 8px 16px;
+    border-bottom: 2px solid transparent;
+    color: #59636e;
+}
+
+QTabBar::tab:selected {
+    color: #1f2328;
+    border-bottom: 2px solid #0b6bcb;
+    font-weight: 600;
+}
+
+/* --- Text styles -------------------------------------------------------- */
+
+#runTitle {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+#emptyTitle {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+#muted, QLabel[empty="true"] {
+    color: #59636e;
+}
+
+#fieldLabel {
+    color: #59636e;
+    font-weight: 600;
+}
+
+#error {
+    color: #a1261b;
+    background: #fdecea;
+    border-radius: 6px;
+    padding: 6px 8px;
+}

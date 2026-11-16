@@ -1,4 +1,12 @@
-"""Shared test fixtures: pytest passes them to any test that names them as a parameter."""
+"""Shared test fixtures: pytest passes them to any test that names them as a parameter.
+
+pytest loads this file before the test modules, so it's the place for settings
+that must exist before anything imports Qt.
+"""
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # UI tests run without opening windows
 
 import pytest
 
