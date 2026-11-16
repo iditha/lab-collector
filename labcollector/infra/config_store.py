@@ -44,6 +44,13 @@ def default_config(output_root: Path) -> AppConfig:
     return AppConfig(output_root=str(output_root))
 
 
+def load_or_create(path: Path, default_output_root: Path) -> AppConfig:
+    """Load the config, first writing a default one if the file doesn't exist yet."""
+    if not path.exists():
+        save(default_config(default_output_root), path)
+    return load(path)
+
+
 def load(path: Path) -> AppConfig:
     try:
         text = path.read_text(encoding="utf-8")
