@@ -2,8 +2,8 @@ import os
 
 import pytest
 
+from labcollector.config_models import Rule
 from labcollector.core.matcher import SourceError, list_files, match_rule
-from labcollector.models import Rule
 
 NOW = 1_700_000_000.0  # fixed "current time" so the tests never depend on the clock
 

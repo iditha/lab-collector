@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from labcollector.models import Rule
+from labcollector.config_models import Rule
 
 log = logging.getLogger(__name__)
 

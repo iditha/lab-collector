@@ -10,7 +10,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from labcollector.models import AppConfig
+from labcollector.config_models import AppConfig
 
 HEADER = """\
 # Lab Collector configuration.

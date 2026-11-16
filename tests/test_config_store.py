@@ -1,7 +1,7 @@
 import pytest
 
+from labcollector.config_models import AppConfig, Rule, Source, folder_name_problem
 from labcollector.infra.config_store import ConfigError, default_config, load, save
-from labcollector.models import AppConfig, Rule, Source, folder_name_problem
 
 VALID_YAML = """
 output_root: D:/LabRuns
