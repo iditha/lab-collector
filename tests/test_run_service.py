@@ -6,9 +6,16 @@ from labcollector.records import Collection, Run
 from labcollector.services.run_service import RunService, RunValidationError
 
 
-def test_create_trims_and_validates(repository):
-    run = RunService(repository).create(Run(name="  RUN-7 ", operator=" Dana "))
-    assert (run.name, run.operator) == ("RUN-7", "Dana")
+def test_create_trims_every_text_field(repository):
+    run = RunService(repository).create(
+        Run(name="  RUN-7 ", operator=" Dana ", location=" Lab 2 ", results="\nok\n")
+    )
+    assert (run.name, run.operator, run.location, run.results) == ("RUN-7", "Dana", "Lab 2", "ok")
+
+
+def test_duplicate_name_is_a_validation_error(repository, run):
+    with pytest.raises(RunValidationError, match="already exists"):
+        RunService(repository).create(Run(name="run-1", operator="Avi"))
 
 
 def test_invalid_run_lists_every_problem(repository):

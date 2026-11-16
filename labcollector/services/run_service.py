@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from labcollector.config_models import folder_name_problem
-from labcollector.infra.repository import Repository
+from labcollector.infra.repository import DuplicateRunError, Repository
 from labcollector.records import Run
 
 log = logging.getLogger(__name__)
@@ -14,6 +14,15 @@ log = logging.getLogger(__name__)
 
 class RunValidationError(ValueError):
     """The run's details are invalid. The message lists every problem, one per line."""
+
+
+TEXT_FIELDS = ("name", "operator", "location", "sw_baseline", "description", "results")
+
+
+def clean(run: Run) -> None:
+    """Remove spaces and blank lines around every text field, so the UI doesn't have to."""
+    for field in TEXT_FIELDS:
+        setattr(run, field, getattr(run, field).strip())
 
 
 def validate(run: Run) -> list[str]:
@@ -38,18 +47,21 @@ class RunService:
         self._repository = repository
 
     def create(self, run: Run) -> Run:
-        """Raises RunValidationError, or DuplicateRunError if the name is taken."""
-        run.name = run.name.strip()
-        run.operator = run.operator.strip()
+        """Raises RunValidationError if the details are invalid or the name is taken."""
+        clean(run)
         problems = validate(run)
         if problems:
             raise RunValidationError("\n".join(problems))
-        created = self._repository.create_run(run)
+        try:
+            created = self._repository.create_run(run)
+        except DuplicateRunError as error:  # one error type for callers: "invalid input"
+            raise RunValidationError(str(error)) from error
         log.info("Created run '%s'", created.name)
         return created
 
     def update(self, run: Run) -> None:
         """Save edited details and refresh run.json in the run's folders."""
+        clean(run)
         existing = self._repository.get_run(run.id)
         if existing is None:
             raise RunValidationError("This run no longer exists.")
