@@ -153,9 +153,16 @@ def test_dialog_creates_a_run(app, runs):
     assert runs.find("RUN-9").results == "Peak at 412 nm"
 
 
+def test_new_run_operator_defaults_to_windows_user(app, runs, monkeypatch):
+    monkeypatch.setenv("USERNAME", "dana")
+    assert RunDialog(runs).operator.text() == "dana"
+    assert RunDialog(runs, runs.create(Run(name="R", operator="Avi"))).operator.text() == "Avi"
+
+
 def test_dialog_shows_every_error_and_stays_open(app, runs):
     dialog = RunDialog(runs)
     dialog.name.setText("bad/name")
+    dialog.operator.clear()
     dialog.buttons.button(SAVE).click()
     assert dialog.saved_run is None
     assert "must not contain /" in dialog.error.text()

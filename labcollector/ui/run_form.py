@@ -1,5 +1,6 @@
 """Dialog to create a new run or edit an existing one."""
 
+import os
 from dataclasses import replace
 
 from PySide6.QtWidgets import (
@@ -65,6 +66,8 @@ class RunDialog(QDialog):
             self._fill(run)
         else:
             self.name.setPlaceholderText("Unique name, e.g. RUN-2026-031")
+            # A good guess: usually the person logged in to Windows ran it. They can change it.
+            self.operator.setText(os.environ.get("USERNAME", ""))
 
     def _fill(self, run: Run) -> None:
         self.name.setText(run.name)
