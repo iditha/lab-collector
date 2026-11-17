@@ -1,11 +1,13 @@
 """UI tests. Qt runs "offscreen" (set in conftest.py), so no window opens."""
 
 import os
+import re
 import sys
 import time
 
 import pytest
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -17,12 +19,14 @@ from PySide6.QtWidgets import (
 
 from labcollector import __version__
 from labcollector.config_models import AppConfig, Rule, Source, UdpSettings
+from labcollector.paths import USER_GUIDE
 from labcollector.records import CollectionStatus, Run
 from labcollector.services.collection_service import CollectionService
 from labcollector.services.run_service import RunService
 from labcollector.services.settings_service import SettingsService
 from labcollector.ui import files_tab, history_tab, settings_dialog
 from labcollector.ui.collect_dialog import PREVIEW, RESULT, RUNNING, CollectDialog
+from labcollector.ui.guide_dialog import GuideDialog
 from labcollector.ui.helpers import install_error_handler
 from labcollector.ui.main_window import EMPTY_PAGE, RUN_PAGE, MainWindow
 from labcollector.ui.run_form import RunDialog
@@ -66,8 +70,10 @@ def settings(tmp_path, config):
 
 
 @pytest.fixture
-def make_window(runs, repository, settings):
-    return lambda: MainWindow(runs, CollectionService(repository), settings)
+def make_window(runs, repository, settings, tmp_path):
+    guide = tmp_path / "USER_GUIDE.md"
+    guide.write_text("# User guide\n\nCreate a run → collect.\n", encoding="utf-8")
+    return lambda: MainWindow(runs, CollectionService(repository), settings, guide)
 
 
 def answer_dialogs(*button_texts: str) -> None:
@@ -257,6 +263,38 @@ def test_new_run_has_empty_files_and_history(app, runs, make_window):
 
 def test_window_title_shows_the_version(app, make_window):
     assert make_window().windowTitle() == f"Lab Collector {__version__}"
+
+
+def test_help_menu_shows_the_user_guide(app, make_window):
+    window = make_window()
+    window.guide_action.trigger()
+    guide = window.findChild(GuideDialog)
+    assert guide.isVisible() and not guide.isModal()  # the window stays usable beside it
+    text = guide.browser.toPlainText()
+    assert "Create a run → collect." in text and "# " not in text  # formatted, not raw
+
+
+def test_guide_screenshots_are_shown_at_half_size(app, tmp_path):
+    (tmp_path / "images").mkdir()
+    QImage(400, 200, QImage.Format.Format_RGB32).save(str(tmp_path / "images" / "shot.png"))
+    guide = tmp_path / "guide.md"
+    guide.write_text("![shot](images/shot.png)\n", encoding="utf-8")
+    dialog = GuideDialog(guide)
+    assert 'width="200"' in dialog.browser.toHtml()  # saved at 2x, shown at 1x: sharp
+
+
+def test_missing_user_guide_is_explained(app, tmp_path):
+    dialog = GuideDialog(tmp_path / "nope.md")
+    assert "wasn't found" in dialog.browser.toPlainText()
+
+
+def test_user_guide_and_its_images_exist():
+    """Renaming the guide or an image would otherwise break Help > User guide unnoticed."""
+    text = USER_GUIDE.read_text(encoding="utf-8")
+    images = re.findall(r"\]\((images/[^)]+)\)", text)
+    assert images
+    for image in images:
+        assert (USER_GUIDE.parent / image).is_file(), image
 
 
 def test_settings_dialog_shows_the_current_settings(app, settings, config):

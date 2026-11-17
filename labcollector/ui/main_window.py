@@ -1,5 +1,7 @@
 """The main window: the list of runs on the left, the selected run on the right."""
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
@@ -27,6 +29,7 @@ from labcollector.services.settings_service import ConfigError, SettingsService
 from labcollector.ui.collect_dialog import CollectDialog
 from labcollector.ui.details_tab import DetailsTab
 from labcollector.ui.files_tab import FilesTab
+from labcollector.ui.guide_dialog import GuideDialog
 from labcollector.ui.helpers import format_date, open_path
 from labcollector.ui.history_tab import HistoryTab
 from labcollector.ui.run_form import RunDialog
@@ -42,11 +45,14 @@ class MainWindow(QMainWindow):
         run_service: RunService,
         collection_service: CollectionService,
         settings_service: SettingsService,
+        user_guide: Path,
     ):
         super().__init__()
         self._run_service = run_service
         self._collection_service = collection_service
         self._settings_service = settings_service
+        self._user_guide = user_guide
+        self._guide: GuideDialog | None = None  # created when first opened
         self._current: Run | None = None
         self.setWindowTitle(f"Lab Collector {__version__}")
         self.resize(1100, 700)
@@ -99,6 +105,9 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction("E&xit", QKeySequence.StandardKey.Quit, self.close)
         help_menu = self.menuBar().addMenu("&Help")
+        self.guide_action = help_menu.addAction(
+            "&User guide", QKeySequence.StandardKey.HelpContents, self._show_guide
+        )
         help_menu.addAction("&About Lab Collector", self._show_about)
 
     def _build_content(self) -> QWidget:
@@ -288,6 +297,14 @@ class MainWindow(QMainWindow):
             self, "Settings reset", f"Default settings restored.\nThe old file: {backup}"
         )
         return True
+
+    def _show_guide(self) -> None:
+        # Not modal (show, not exec), so the user can follow the guide in the window behind it.
+        if self._guide is None:
+            self._guide = GuideDialog(self._user_guide, parent=self)
+        self._guide.show()
+        self._guide.raise_()
+        self._guide.activateWindow()
 
     def _show_about(self) -> None:
         QMessageBox.about(

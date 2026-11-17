@@ -36,6 +36,7 @@ def main() -> int:
         run_service=RunService(repository),
         collection_service=CollectionService(repository),
         settings_service=SettingsService(paths.CONFIG_PATH, paths.DEFAULT_OUTPUT_ROOT),
+        user_guide=paths.USER_GUIDE,
     )
     window.show()
     window.load_config()  # a broken config.yaml is explained now, not at the first collection
