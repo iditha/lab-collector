@@ -1,8 +1,7 @@
 """The main window: the list of runs on the left, the selected run on the right."""
 
-from collections.abc import Callable
-
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -19,17 +18,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from labcollector import __version__
 from labcollector.config_models import AppConfig
-from labcollector.infra.config_store import ConfigError
 from labcollector.records import Run
 from labcollector.services.collection_service import CollectionService
 from labcollector.services.run_service import RunService
+from labcollector.services.settings_service import ConfigError, SettingsService
 from labcollector.ui.collect_dialog import CollectDialog
 from labcollector.ui.details_tab import DetailsTab
 from labcollector.ui.files_tab import FilesTab
-from labcollector.ui.helpers import format_date
+from labcollector.ui.helpers import format_date, open_path
 from labcollector.ui.history_tab import HistoryTab
 from labcollector.ui.run_form import RunDialog
+from labcollector.ui.settings_dialog import SettingsDialog
 
 EMPTY_PAGE, RUN_PAGE = 0, 1
 DETAILS_TAB, FILES_TAB, HISTORY_TAB = 0, 1, 2
@@ -40,16 +41,14 @@ class MainWindow(QMainWindow):
         self,
         run_service: RunService,
         collection_service: CollectionService,
-        load_config: Callable[[], AppConfig],
+        settings_service: SettingsService,
     ):
-        """``load_config`` reads config.yaml; it's called before every collection so that
-        edits made outside the app are picked up. It raises ConfigError if the file is bad."""
         super().__init__()
         self._run_service = run_service
         self._collection_service = collection_service
-        self._load_config = load_config
+        self._settings_service = settings_service
         self._current: Run | None = None
-        self.setWindowTitle("Lab Collector")
+        self.setWindowTitle(f"Lab Collector {__version__}")
         self.resize(1100, 700)
 
         splitter = QSplitter()
@@ -58,6 +57,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)  # extra width goes to the content, not the list
         splitter.setSizes([300, 800])
         self.setCentralWidget(splitter)
+        self._build_menu()
 
         self.refresh_runs()
 
@@ -79,6 +79,9 @@ class MainWindow(QMainWindow):
         new_button = QPushButton("+  New run")
         new_button.setObjectName("primary")
         new_button.clicked.connect(self._new_run)
+        settings_button = QPushButton("Settings")
+        settings_button.setToolTip("Where files are collected from and copied to, and UDP.")
+        settings_button.clicked.connect(self.open_settings)
 
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
@@ -86,7 +89,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(new_button)
         layout.addWidget(self.search)
         layout.addWidget(self.run_list)
+        layout.addWidget(settings_button)
         return sidebar
+
+    def _build_menu(self) -> None:
+        file_menu = self.menuBar().addMenu("&File")
+        file_menu.addAction("&New run…", QKeySequence.StandardKey.New, self._new_run)
+        file_menu.addAction("&Settings…", QKeySequence("Ctrl+,"), self.open_settings)
+        file_menu.addSeparator()
+        file_menu.addAction("E&xit", QKeySequence.StandardKey.Quit, self.close)
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction("&About Lab Collector", self._show_about)
 
     def _build_content(self) -> QWidget:
         self.pages = QStackedWidget()
@@ -219,13 +232,68 @@ class MainWindow(QMainWindow):
     def _collect(self) -> None:
         if self._current is None:
             return
-        try:
-            config = self._load_config()  # re-read now, to pick up edits made outside the app
-        except ConfigError as error:
-            QMessageBox.warning(self, "Configuration problem", str(error))
+        config = self.load_config()  # re-read now, to pick up edits made outside the app
+        if config is None:
             return
         dialog = CollectDialog(self._collection_service, self._current, config, parent=self)
         dialog.exec()
         if dialog.collection is not None:
             self._show_collections(self._current)
             self.tabs.setCurrentIndex(FILES_TAB)
+
+    def open_settings(self) -> None:
+        config = self.load_config()
+        if config is not None:
+            SettingsDialog(self._settings_service, config, parent=self).exec()
+
+    def load_config(self) -> AppConfig | None:
+        """Read config.yaml. If it's broken, explain why and offer to fix it.
+
+        Returns the settings, or None if they're still broken (or the user closed the box).
+        """
+        try:
+            return self._settings_service.load()
+        except ConfigError as error:
+            if self._offer_config_fix(str(error)):
+                return self._settings_service.load()  # reset worked: carry on with defaults
+            return None
+
+    def _offer_config_fix(self, problem: str) -> bool:
+        """Explain a broken config.yaml and offer to fix it. Returns True if it was reset."""
+        box = QMessageBox(QMessageBox.Icon.Warning, "Settings problem", problem, parent=self)
+        box.setInformativeText(
+            "Fix config.yaml in a text editor, or reset it to the default settings "
+            "(the current file is kept as config.yaml.bak)."
+        )
+        open_button = box.addButton("Open config.yaml", QMessageBox.ButtonRole.ActionRole)
+        reset_button = box.addButton("Reset to default", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if box.clickedButton() is open_button:
+            open_path(self._settings_service.config_path, self)
+            return False
+        if box.clickedButton() is not reset_button:
+            return False
+        try:
+            backup = self._settings_service.reset_to_default()
+        except OSError as error:  # e.g. the data folder is read-only, or the file is locked
+            QMessageBox.warning(
+                self,
+                "Couldn't reset",
+                f"The settings couldn't be reset: {error.strerror or error}\n\n"
+                f"Fix or delete this file by hand:\n{self._settings_service.config_path}",
+            )
+            return False
+        QMessageBox.information(
+            self, "Settings reset", f"Default settings restored.\nThe old file: {backup}"
+        )
+        return True
+
+    def _show_about(self) -> None:
+        QMessageBox.about(
+            self,
+            "About Lab Collector",
+            f"<b>Lab Collector {__version__}</b><p>Collects lab-run output files into an "
+            "organized folder per run, keeps a history of every collection and reports "
+            "missing, failed and corrupt files.</p>",
+        )

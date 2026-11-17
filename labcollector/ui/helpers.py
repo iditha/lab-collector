@@ -1,9 +1,12 @@
 """Small helpers shared by the UI widgets."""
 
+import logging
 import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
+from types import TracebackType
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QColor, QDesktopServices
@@ -21,6 +24,7 @@ STATUS_NAMES = {
 # The same colors as the HTML report, so a status looks the same everywhere.
 WARNING_COLOR = QColor(COLORS[CollectionStatus.PARTIAL][1])  # orange: needs attention
 ERROR_COLOR = QColor(COLORS[CollectionStatus.FAILED][1])  # red: a problem
+SUCCESS_COLOR = QColor(COLORS[CollectionStatus.SUCCESS][1])  # green: done
 
 
 def format_date(iso_text: str) -> str:
@@ -58,3 +62,31 @@ def _exists_or_warn(path: Path, parent: QWidget | None) -> bool:
         return True
     QMessageBox.warning(parent, "Not found", f"This no longer exists (moved or deleted):\n{path}")
     return False
+
+
+def install_error_handler(log_file: Path) -> None:
+    """Catch any error nothing else handled: log it in full and tell the user.
+
+    Without this, an unexpected error inside a button's code is only printed to a console the
+    user never sees (there is none in the .exe), and the app just seems to do nothing.
+    """
+
+    def handle(
+        error_type: type[BaseException], error: BaseException, trace: TracebackType | None
+    ) -> None:
+        if issubclass(error_type, KeyboardInterrupt):  # Ctrl+C in a terminal: behave normally
+            sys.__excepthook__(error_type, error, trace)
+            return
+        logging.getLogger("labcollector").critical(
+            "Unexpected error", exc_info=(error_type, error, trace)
+        )
+        if threading.current_thread() is not threading.main_thread():
+            return  # Qt allows windows only on the main thread; the error is logged above
+        QMessageBox.critical(
+            None,
+            "Unexpected error",
+            f"Something went wrong: {error}\n\nThe details were written to the log file:\n"
+            f"{log_file}",
+        )
+
+    sys.excepthook = handle

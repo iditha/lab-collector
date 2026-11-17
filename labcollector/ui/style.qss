@@ -17,9 +17,15 @@ QMainWindow, QDialog, #runPage {
 }
 
 QListWidget {
+    background: #ffffff;
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    outline: none; /* no dotted focus rectangle */
+}
+
+#sidebar QListWidget {  /* the runs list blends into the sidebar */
     background: transparent;
     border: none;
-    outline: none; /* no dotted focus rectangle */
 }
 
 QListWidget::item {
@@ -126,4 +132,26 @@ QTabBar::tab:selected {
     background: #fdecea;
     border-radius: 6px;
     padding: 6px 8px;
+}
+
+/* --- Settings ----------------------------------------------------------- */
+
+QGroupBox {
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    margin-top: 14px;   /* room for the title */
+    padding: 12px 8px 8px 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #59636e;
+}
+
+QSpinBox {
+    border: 1px solid #d1d9e0;
+    border-radius: 6px;
+    padding: 4px 6px;
 }

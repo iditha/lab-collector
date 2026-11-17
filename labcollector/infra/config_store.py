@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from labcollector.config_models import AppConfig
 
@@ -23,6 +23,7 @@ HEADER = """\
 #
 #   - name: Instrument A
 #     path: C:/InstrumentA/Output
+#     enabled: true            # false = skip this source, but keep its rules
 #     recursive: false         # also scan subfolders
 #     rules:
 #       - name: Measurement logs
@@ -70,11 +71,20 @@ def load(path: Path) -> AppConfig:
 
     if not isinstance(data, dict):
         raise ConfigError(f"{path.name} is empty or doesn't contain settings.")
+    return validate(data, AppConfig, where=path.name)
 
+
+def validate[M: BaseModel](data: dict, model: type[M], where: str | None = None) -> M:
+    """Check settings given as plain data: the whole config (AppConfig) or one Source.
+
+    Used for the file and for the Settings dialog, so both give the same messages.
+    Raises ConfigError listing every problem by name, e.g.
+    "sources > 'Instrument A' > rules > 'Logs' > newest: ...".
+    """
     try:
-        return AppConfig.model_validate(data)
+        return model.model_validate(data)
     except ValidationError as error:
-        raise ConfigError(_describe_validation_error(path, data, error)) from error
+        raise ConfigError(_describe_validation_error(where, data, error)) from error
 
 
 def save(config: AppConfig, path: Path) -> None:
@@ -95,8 +105,8 @@ def _describe_yaml_error(path: Path, error: yaml.YAMLError) -> str:
     return f"{path.name} is not valid YAML{where}: {reason}"
 
 
-def _describe_validation_error(path: Path, data: dict, error: ValidationError) -> str:
-    lines = [f"{path.name} has invalid settings:"]
+def _describe_validation_error(where: str | None, data: dict, error: ValidationError) -> str:
+    lines = [f"{where} has invalid settings:" if where else "Some settings are invalid:"]
     for item in error.errors():
         message = item["msg"].removeprefix("Value error, ")
         if item["type"] == "extra_forbidden":

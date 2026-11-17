@@ -26,8 +26,8 @@ Layers, with dependencies pointing down only:
 
 | Layer | Files | Rule |
 |---|---|---|
-| `ui/` | `main_window`, `run_form`, `details_tab`, `files_tab`, `history_tab`, `collect_dialog`, `report_view`, `worker`, `helpers`, `style.qss` | Shows data and calls services. No business logic. Never touches the database, the network or the config file directly. |
-| `services/` | `run_service` (create/edit runs, `run.json`), `collection_service` (`preview()`, `collect()`, `history()`) | Orchestrates core + infra for one use case. No Qt. |
+| `ui/` | `main_window`, `run_form`, `details_tab`, `files_tab`, `history_tab`, `collect_dialog`, `report_view`, `worker`, `settings_dialog`, `source_dialog`, `helpers` (incl. the global error handler), `style.qss` | Shows data and calls services. No business logic. Never touches the database, the network or the config file directly. |
+| `services/` | `run_service` (create/edit runs, `run.json`), `collection_service` (`preview()`, `collect()`, `history()`), `settings_service` (load/validate/save config.yaml, reset, UDP test) | Orchestrates core + infra for one use case. No Qt. |
 | `core/` | `matcher` (rule filter pipeline), `verifier` (size, SHA-256, content checks), `report` (HTML/JSON report) | Pure logic. No Qt, no database, no network. |
 | `infra/` | `config_store` (config.yaml), `repository` (SQLite: the only place with SQL), `udp_notifier` | Wraps one external thing each. |
 
@@ -46,12 +46,21 @@ Key behaviour:
   failed one. Problems become file results or `messages`; a UDP failure is only a warning.
 - Collections run in a background `QThread` (`ui/worker.py`); the window is updated only
   through signals.
-- `config.yaml` is re-read before every collection, so edits made outside the app are used.
+- `config.yaml` is re-read before every collection and when Settings opens, so edits made
+  outside the app are used. A broken file is explained, with "Open config.yaml" and "Reset to
+  default" (the old file is kept as `config.yaml.bak`).
+- Settings: the dialogs edit plain data; the same pydantic validation as the file checks it
+  (all settings on Save, one source on OK in `SourceDialog`). Disabled sources are skipped.
+- Each collection records the app version (`__version__` in `labcollector/__init__.py`); it
+  is shown in the window title, the report and the UDP message.
 
 ## Conventions
 
 - Type hints everywhere. Docstrings and comments explain *why*, not *what*.
 - Records: `@dataclass(kw_only=True)`. Config: pydantic models with `extra="forbid"`.
+- Database changes: never edit `SCHEMA` in `repository.py`; append a statement to `MIGRATIONS`
+  (applied once, in order, tracked by `PRAGMA user_version`) and add a test that upgrades an
+  old database.
 - Paths are passed in as parameters; only `__main__.py` reads the constants in `paths.py`.
 - Specific exceptions only; a broad `except Exception` only at an outermost boundary, logged.
   Expected outcomes (a corrupt file, a failed UDP send) are returned as results, not raised.
@@ -69,16 +78,16 @@ Key behaviour:
 ## Status
 
 Done: project setup, config and rules, copy + verification, database and history, report,
-UDP, main window, run form, collect dialog, Files and History tabs.
+UDP, main window, run form, collect dialog, Files and History tabs, Settings (sources, rules,
+UDP test, enable/disable), app version tracking, database migrations, global error handler,
+broken-config handling.
 
 Next:
-- **Settings dialog**: output folder (folder picker), sources and rules, UDP host/port with a
-  "Send test message" button, open / reload config.yaml; saving validates first. Plus an
-  `enabled` switch per source, the app version in the window title, report, UDP message and
-  each saved collection, a global error handler, and a clear dialog for an invalid config at start.
 - **Delivery**: PyInstaller build, `README.md` (install and run), `docs/ARCHITECTURE.md`
   (including "Extending the app"), `docs/USER_GUIDE.md` with screenshots and a Help menu entry,
   `AI_USAGE.md`, `CHANGELOG.md`, git tag `v1.0.0`.
 
 Known limitations: the collect preview lists folders on the UI thread, so an unreachable network
-share can freeze it briefly; lines mixing Hebrew and English may display in the wrong order.
+share can freeze it briefly; likewise "Send test message" in Settings runs on the UI thread, so a
+computer name that is slow to look up can freeze the window for a few seconds; lines mixing
+Hebrew and English may display in the wrong order.

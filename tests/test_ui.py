@@ -1,19 +1,33 @@
 """UI tests. Qt runs "offscreen" (set in conftest.py), so no window opens."""
 
+import os
+import sys
 import time
 
 import pytest
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialogButtonBox
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QMessageBox,
+)
 
+from labcollector import __version__
 from labcollector.config_models import AppConfig, Rule, Source, UdpSettings
 from labcollector.records import CollectionStatus, Run
 from labcollector.services.collection_service import CollectionService
 from labcollector.services.run_service import RunService
-from labcollector.ui import files_tab, history_tab
+from labcollector.services.settings_service import SettingsService
+from labcollector.ui import files_tab, history_tab, settings_dialog
 from labcollector.ui.collect_dialog import PREVIEW, RESULT, RUNNING, CollectDialog
+from labcollector.ui.helpers import install_error_handler
 from labcollector.ui.main_window import EMPTY_PAGE, RUN_PAGE, MainWindow
 from labcollector.ui.run_form import RunDialog
+from labcollector.ui.settings_dialog import SettingsDialog
+from labcollector.ui.source_dialog import NEW_RULE, SourceDialog
 
 SAVE = QDialogButtonBox.StandardButton.Save
 
@@ -44,8 +58,38 @@ def config(tmp_path):
 
 
 @pytest.fixture
-def make_window(runs, repository, config):
-    return lambda: MainWindow(runs, CollectionService(repository), load_config=lambda: config)
+def settings(tmp_path, config):
+    """A SettingsService whose config.yaml (in a temporary folder) holds ``config``."""
+    service = SettingsService(tmp_path / "config.yaml", tmp_path / "out")
+    service.save(config)
+    return service
+
+
+@pytest.fixture
+def make_window(runs, repository, settings):
+    return lambda: MainWindow(runs, CollectionService(repository), settings)
+
+
+def answer_dialogs(*button_texts: str) -> None:
+    """Click buttons in the message boxes that will open next, in order.
+
+    A message box waits for the user, so the clicks are scheduled before it opens: Qt runs
+    the timer while the box is waiting, and the click closes it like a real user would.
+    """
+    remaining = list(button_texts)
+
+    def click_next() -> None:
+        box = QApplication.activeModalWidget()
+        if box is None:  # not open yet: try again shortly
+            QTimer.singleShot(10, click_next)
+            return
+        text = remaining.pop(0)
+        button = next(b for b in box.findChildren(QAbstractButton) if b.text() == text)
+        button.click()
+        if remaining:
+            QTimer.singleShot(10, click_next)
+
+    QTimer.singleShot(10, click_next)
 
 
 def collect_and_wait(dialog: CollectDialog, timeout: float = 10.0) -> None:
@@ -199,3 +243,141 @@ def test_new_run_has_empty_files_and_history(app, runs, make_window):
     assert window.files.currentIndex() == files_tab.EMPTY_PAGE
     assert window.history.currentIndex() == history_tab.EMPTY_PAGE
     assert window.tabs.tabText(2) == "History"
+
+
+# --- Settings (M5) -----------------------------------------------------------------
+
+
+def test_window_title_shows_the_version(app, make_window):
+    assert make_window().windowTitle() == f"Lab Collector {__version__}"
+
+
+def test_settings_dialog_shows_the_current_settings(app, settings, config):
+    dialog = SettingsDialog(settings, config)
+    assert dialog.output_root.text() == config.output_root
+    assert dialog.source_list.count() == 1
+    assert dialog.source_list.item(0).checkState() == Qt.CheckState.Checked
+    assert not dialog.udp_enabled.isChecked()
+
+
+def test_unticking_a_source_and_saving_writes_it_to_the_file(app, settings, config):
+    dialog = SettingsDialog(settings, config)
+    dialog.source_list.item(0).setCheckState(Qt.CheckState.Unchecked)
+    dialog.output_root.setText("D:/LabRuns")
+    dialog.save_button.click()
+    saved = settings.load()
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    assert saved.output_root == "D:/LabRuns"
+    assert saved.sources[0].enabled is False
+
+
+def test_invalid_settings_are_shown_and_not_saved(app, settings, config):
+    before = settings.config_path.read_text(encoding="utf-8")
+    dialog = SettingsDialog(settings, config)
+    dialog.output_root.setText("")
+    dialog.save_button.click()
+    assert dialog.result() != QDialog.DialogCode.Accepted
+    assert "output_root" in dialog.error.text()
+    assert settings.config_path.read_text(encoding="utf-8") == before
+
+
+def test_editing_a_source_replaces_it(app, settings, config, monkeypatch):
+    class FakeSourceDialog:  # stands in for the real dialog, which would wait for a user
+        def __init__(self, _settings, source, parent=None):
+            self.source = {**source, "name": "Renamed"}
+
+        def exec(self):
+            return True
+
+    monkeypatch.setattr(settings_dialog, "SourceDialog", FakeSourceDialog)
+    dialog = SettingsDialog(settings, config)
+    dialog.source_list.setCurrentRow(0)
+    dialog.edit_button.click()
+    assert dialog.source_list.item(0).text().startswith("Renamed")
+
+
+def test_source_dialog_cleans_valid_input(app, settings):
+    dialog = SourceDialog(settings, {"name": "", "path": "", "rules": [NEW_RULE]})
+    dialog.name.setText("Scope")
+    dialog.path.setText("C:/Scope/Out")
+    dialog.rules.item(0, 3).setText("CSV, log")  # the Extensions column
+    dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).click()
+    assert dialog.source["name"] == "Scope"
+    assert dialog.source["rules"][0]["extensions"] == [".csv", ".log"]
+
+
+def test_source_dialog_shows_errors_and_stays_open(app, settings):
+    dialog = SourceDialog(settings, {"name": "", "path": "", "rules": [NEW_RULE]})
+    dialog.rules.item(0, 4).setText("lots")  # Newest N must be a number
+    dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).click()
+    assert dialog.source is None
+    assert "name" in dialog.error.text() and "newest" in dialog.error.text()
+
+
+def test_broken_config_can_be_reset_with_the_real_button(app, settings, make_window):
+    window = make_window()
+    settings.config_path.write_text("udp: host: oops\n", encoding="utf-8")
+
+    answer_dialogs("Reset to default", "OK")  # the problem box, then "Settings reset"
+    config = window.load_config()
+
+    assert config is not None and config.sources == []  # carries on with default settings
+    backup = settings.config_path.with_name("config.yaml.bak")
+    assert backup.read_text(encoding="utf-8") == "udp: host: oops\n"  # the old file is kept
+
+
+def test_save_warns_before_overwriting_outside_edits(app, settings, config, monkeypatch):
+    dialog = SettingsDialog(settings, config)
+    stamp = settings.config_path.stat().st_mtime
+    os.utime(settings.config_path, (stamp + 10, stamp + 10))  # "edited in Notepad"
+    dialog.output_root.setText("D:/LabRuns")
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No)
+    dialog.save_button.click()
+    assert settings.load().output_root != "D:/LabRuns"  # No: the outside edit is kept
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    dialog.save_button.click()
+    assert settings.load().output_root == "D:/LabRuns"  # Yes: saved anyway
+
+
+def test_reload_reads_the_file_again(app, settings, config):
+    dialog = SettingsDialog(settings, config)
+    settings.save(config.model_copy(update={"output_root": "E:/Elsewhere"}))
+    dialog.reload_button.click()
+    assert dialog.output_root.text() == "E:/Elsewhere"
+
+
+def test_adding_a_source(app, settings, config, monkeypatch):
+    class FakeSourceDialog:  # stands in for the real dialog, which would wait for a user
+        def __init__(self, _settings, source, parent=None):
+            self.source = {**source, "name": "Scope", "path": "C:/Scope", "enabled": True}
+
+        def exec(self):
+            return True
+
+    monkeypatch.setattr(settings_dialog, "SourceDialog", FakeSourceDialog)
+    dialog = SettingsDialog(settings, config)
+    dialog.add_button.click()
+    assert dialog.source_list.count() == 2
+    assert dialog.source_list.item(1).text().startswith("Scope")
+
+
+def test_unexpected_errors_are_logged_and_shown(app, monkeypatch, tmp_path):
+    shown = []
+    monkeypatch.setattr(sys, "excepthook", sys.excepthook)  # restored after the test
+    monkeypatch.setattr(QMessageBox, "critical", lambda *args: shown.append(args[2]))
+    install_error_handler(tmp_path / "app.log")
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError:
+        sys.excepthook(*sys.exc_info())
+    assert "Something went wrong: boom" in shown[0]
+    assert str(tmp_path / "app.log") in shown[0]
+
+
+def test_removing_a_source(app, settings, config):
+    dialog = SettingsDialog(settings, config)
+    dialog.source_list.setCurrentRow(0)
+    dialog.remove_button.click()
+    assert dialog.source_list.count() == 0
