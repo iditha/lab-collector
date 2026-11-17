@@ -110,3 +110,30 @@ def test_duplicate_source_names_rejected():
 )
 def test_folder_name_problem(name, ok):
     assert (folder_name_problem(name) is None) == ok
+
+
+def test_star_in_extensions_is_ignored():
+    rule = Rule(name="r", category="c", extensions=["*.csv", "*.LOG", "txt"])
+    assert rule.extensions == [".csv", ".log", ".txt"]
+
+
+def test_star_dot_star_means_any_extension():
+    assert Rule(name="r", category="c", extensions=["*.*"]).extensions == []  # empty = any
+    assert Rule(name="r", category="c", extensions=["*", ".csv"]).extensions == [".csv"]
+
+
+def test_other_wildcards_are_rejected():
+    with pytest.raises(ValueError, match="can't contain wildcards"):
+        Rule(name="r", category="c", extensions=["c*v"])
+
+
+def test_enabled_sources():
+    rule = Rule(name="r", category="c")
+    config = AppConfig(
+        output_root="x",
+        sources=[
+            Source(name="On", path="p", rules=[rule]),
+            Source(name="Off", path="q", enabled=False, rules=[rule]),
+        ],
+    )
+    assert [source.name for source in config.enabled_sources] == ["On"]

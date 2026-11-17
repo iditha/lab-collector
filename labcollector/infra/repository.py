@@ -56,6 +56,14 @@ CREATE INDEX IF NOT EXISTS idx_collections_run ON collections(run_id);
 CREATE INDEX IF NOT EXISTS idx_files_collection ON collected_files(collection_id);
 """
 
+# Changes to the tables after the first version. SCHEMA above is never edited; each later
+# change is added here instead, so existing databases are upgraded without losing data.
+# The database's "user_version" counts how many of these have been applied.
+MIGRATIONS = [
+    # 1: remember which version of the app made each collection
+    "ALTER TABLE collections ADD COLUMN app_version TEXT NOT NULL DEFAULT ''",
+]
+
 # Column names, used to build the INSERT/UPDATE statements below. Building SQL with
 # f-strings is safe here because these are fixed constants; every *value* is passed
 # separately as a "?" parameter, which is what prevents SQL injection.
@@ -83,6 +91,21 @@ class Repository:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            applied = conn.execute("PRAGMA user_version").fetchone()[0]
+        for number, statement in enumerate(MIGRATIONS[applied:], start=applied + 1):
+            self._apply_migration(number, statement)
+
+    def _apply_migration(self, number: int, statement: str) -> None:
+        """Apply one migration and record its number together, in one transaction.
+
+        Python's sqlite3 would otherwise commit ALTER TABLE on its own. A crash between the
+        change and the version number would then leave the database half-upgraded, and the
+        next start would fail trying to add the same column again.
+        """
+        with self._connect() as conn:
+            conn.execute("BEGIN")
+            conn.execute(statement)
+            conn.execute(f"PRAGMA user_version = {number}")  # a number we control, not input
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -155,7 +178,8 @@ class Repository:
         with self._connect() as conn:
             cursor = conn.execute(
                 "INSERT INTO collections (run_id, started_at, finished_at, status, folder, "
-                "udp_status, messages, config_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "udp_status, app_version, messages, config_snapshot) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     collection.run_id,
                     collection.started_at,
@@ -163,6 +187,7 @@ class Repository:
                     collection.status,
                     collection.folder,
                     collection.udp_status,
+                    collection.app_version,
                     json.dumps(collection.messages, ensure_ascii=False),
                     json.dumps(collection.config_snapshot, ensure_ascii=False),
                 ],
@@ -230,6 +255,7 @@ def _row_to_collection(row: sqlite3.Row, files: list[FileResult]) -> Collection:
         status=CollectionStatus(row["status"]),
         folder=row["folder"],
         udp_status=row["udp_status"],
+        app_version=row["app_version"],
         messages=json.loads(row["messages"]),
         config_snapshot=json.loads(row["config_snapshot"]),
         files=files,

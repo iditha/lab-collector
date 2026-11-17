@@ -62,6 +62,7 @@ def to_json(collection: Collection, run: Run) -> str:
             "headline": headline(collection),
             "folder": collection.folder,
             "udp_status": collection.udp_status,
+            "app_version": collection.app_version,
             "messages": collection.messages,
         },
         "summary": summary(collection),
@@ -162,6 +163,10 @@ def _run_details(run: Run, collection: Collection) -> str:
         ("Results", run.results),
         ("Output folder", collection.folder),
         ("UDP message", collection.udp_status),
+        (
+            "Collected by",
+            f"Lab Collector {collection.app_version}" if collection.app_version else "",
+        ),
     ]
     rows = "".join(
         f"<tr><th>{label}</th><td dir='auto' class='text'>{_e(value)}</td></tr>"

@@ -62,6 +62,7 @@ class Collection:
     files: list[FileResult] = field(default_factory=list)
     messages: list[str] = field(default_factory=list)  # problems not tied to one file
     udp_status: str = ""
+    app_version: str = ""  # which version of Lab Collector made this collection
     config_snapshot: dict = field(default_factory=dict)  # the config used, for traceability
     id: int | None = None
 

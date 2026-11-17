@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from labcollector import __version__
 from labcollector.config_models import AppConfig, Rule, Source, UdpSettings
 from labcollector.records import CollectionStatus, FileStatus
 from labcollector.services.collection_service import CollectionService, free_path, preview
@@ -179,6 +180,7 @@ def test_udp_message_is_sent(repository, run, tmp_path, sources):
 
     assert collection.udp_status == f"sent to 127.0.0.1:{port}"
     assert message["run"] == "RUN-1" and message["status"] == "success"
+    assert message["app_version"] == __version__
 
 
 def test_preview_copies_nothing(tmp_path, sources):
@@ -207,3 +209,33 @@ def test_run_json_write_failure_is_reported_but_not_fatal(repository, run, tmp_p
     assert collection.status == CollectionStatus.SUCCESS  # the files themselves were fine
     assert any("Couldn't write run.json" in m for m in collection.messages)
     assert repository.get_collection(collection.id) is not None  # still saved to history
+
+
+def test_disabled_source_is_skipped(repository, run, tmp_path, sources):
+    config = make_config(
+        tmp_path,
+        sources,
+        [Rule(name="Meas", category="m", prefix="MEAS_")],
+        [Rule(name="Logs", category="logs")],
+    )
+    config.sources[1].enabled = False
+    assert [plan.source for plan in preview(config)] == ["A"]
+    collection = collect(repository, run, config)
+    assert {f.source for f in collection.files} == {"A"}
+    assert collection.status == CollectionStatus.SUCCESS
+
+
+def test_all_sources_disabled_fails_with_clear_message(repository, run, tmp_path, sources):
+    config = make_config(tmp_path, sources, [Rule(name="Meas", category="m", prefix="MEAS_")])
+    config.sources[0].enabled = False
+    collection = collect(repository, run, config)
+    assert collection.status == CollectionStatus.FAILED
+    assert "No source folders are enabled" in collection.messages[0]
+
+
+def test_collection_records_the_app_version(repository, run, tmp_path, sources):
+    config = make_config(tmp_path, sources, [Rule(name="Meas", category="m", prefix="MEAS_")])
+    collection = collect(repository, run, config)
+    assert collection.app_version == __version__
+    report_html = (Path(collection.folder) / "report.html").read_text(encoding="utf-8")
+    assert f"Lab Collector {__version__}" in report_html

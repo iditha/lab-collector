@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from labcollector import __version__
 from labcollector.config_models import AppConfig
 from labcollector.core import report
 from labcollector.core.matcher import FileInfo, SourceError, list_files, match_rule
@@ -48,9 +49,9 @@ class RulePlan:
 
 
 def preview(config: AppConfig, now: float | None = None) -> list[RulePlan]:
-    """Match every rule against its source folder. Each folder is listed only once."""
+    """Match every rule of every enabled source. Each folder is listed only once."""
     plans = []
-    for source in config.sources:
+    for source in config.enabled_sources:
         try:
             files = list_files(Path(source.path), source.recursive)
             error = ""
@@ -94,15 +95,16 @@ class CollectionService:
         collection = Collection(
             run_id=run.id,
             started_at=_timestamp(started),
+            app_version=__version__,
             config_snapshot=config.model_dump(mode="json"),
         )
         log.info("Collection for run '%s' started", run.name)
 
         fatal = cancelled = False
         try:
-            if not config.sources:
+            if not config.enabled_sources:
                 raise FatalCollectionError(
-                    "No source folders are configured. Add them in Settings."
+                    "No source folders are enabled. Add or enable them in Settings."
                 )
             plans = preview(config, now)
             folder = _create_collection_folder(Path(config.output_root) / run.name, started)
@@ -132,6 +134,7 @@ class CollectionService:
             return "disabled"
         payload = {
             "app": "LabCollector",
+            "app_version": collection.app_version,
             "run": run.name,
             "started_at": collection.started_at,
             "status": collection.status,

@@ -2,7 +2,8 @@ import sqlite3
 
 import pytest
 
-from labcollector.infra.repository import DuplicateRunError
+from labcollector.infra import repository as repository_module
+from labcollector.infra.repository import MIGRATIONS, SCHEMA, DuplicateRunError, Repository
 from labcollector.records import Collection, CollectionStatus, FileResult, FileStatus, Run
 
 
@@ -91,3 +92,53 @@ def test_list_collections_newest_first(repository, run):
 def test_collection_must_belong_to_existing_run(repository):
     with pytest.raises(sqlite3.IntegrityError):
         repository.save_collection(make_collection(run_id=999))
+
+
+def user_version(path) -> int:
+    conn = sqlite3.connect(path)
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    conn.close()
+    return version
+
+
+def test_old_database_is_upgraded_without_losing_data(tmp_path):
+    """A database made before app_version existed gets the new column; its data stays."""
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(SCHEMA)  # the original layout, user_version 0
+    conn.execute("INSERT INTO runs (name, operator, created_at) VALUES ('OLD-1', 'Dana', 'x')")
+    conn.execute(
+        "INSERT INTO collections (run_id, started_at, finished_at, status, folder) "
+        "VALUES (1, 's', 'f', 'success', 'D:/out')"
+    )
+    conn.commit()
+    conn.close()
+
+    repository = Repository(path)
+    Repository(path)  # opening it again must not apply the upgrade twice
+
+    [old] = repository.list_collections(1)
+    assert old.app_version == ""  # rows from before the upgrade get the default
+    assert user_version(path) == len(MIGRATIONS)
+
+
+def test_failed_migration_is_not_recorded_and_is_retried(tmp_path, monkeypatch):
+    """If a migration fails, its version isn't recorded, so the next start can retry it."""
+    good = "ALTER TABLE collections ADD COLUMN good TEXT"
+    bad = "ALTER TABLE no_such_table ADD COLUMN x TEXT"
+    monkeypatch.setattr(repository_module, "MIGRATIONS", [good, bad])
+    path = tmp_path / "test.db"
+
+    with pytest.raises(sqlite3.OperationalError):
+        Repository(path)
+    assert user_version(path) == 1  # the good one is recorded, the bad one isn't
+
+    monkeypatch.setattr(repository_module, "MIGRATIONS", [good])  # "fixed" in a later version
+    Repository(path)  # starts normally: no "duplicate column" from re-adding "good"
+
+
+def test_app_version_is_saved(repository, run):
+    collection = make_collection(run.id)
+    collection.app_version = "1.2.3"
+    saved = repository.save_collection(collection)
+    assert repository.get_collection(saved.id).app_version == "1.2.3"

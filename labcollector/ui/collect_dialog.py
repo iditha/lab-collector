@@ -108,10 +108,10 @@ class CollectDialog(QDialog):
     # --- Steps ---------------------------------------------------------------------
 
     def _show_preview(self) -> None:
-        if not self._config.sources:
+        if not self._config.enabled_sources:
             self.preview_summary.setText(
-                "No source folders are configured yet, so there is nothing to collect. "
-                "Add sources in the configuration first."
+                "No source folders are enabled, so there is nothing to collect. "
+                "Add or enable sources in Settings."
             )
             self.start_button.setEnabled(False)
             return

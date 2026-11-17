@@ -55,12 +55,15 @@ class Rule(BaseModel):
     @field_validator("extensions")
     @classmethod
     def _normalize_extensions(cls, values: list[str]) -> list[str]:
-        """'CSV', '.Csv' and '.csv' all become '.csv'."""
+        """'CSV', '.Csv', '*.csv' and '.csv' all become '.csv'. '*' and '*.*' mean any type."""
         normalized = []
         for value in values:
-            ext = value.strip().lower()
-            if ext:
-                normalized.append(ext if ext.startswith(".") else "." + ext)
+            ext = value.strip().lower().lstrip("*")  # people often type *.csv out of habit
+            if ext in ("", ".", ".*"):
+                continue  # "*" or "*.*": any extension, the same as leaving the list empty
+            if "*" in ext or "?" in ext:
+                raise ValueError(f"extension '{value}' can't contain wildcards; write e.g. .csv")
+            normalized.append(ext if ext.startswith(".") else "." + ext)
         return normalized
 
     @model_validator(mode="after")
@@ -79,6 +82,7 @@ class Source(BaseModel):
 
     name: str = Field(min_length=1)
     path: str = Field(min_length=1)
+    enabled: bool = True  # switch a source off without deleting its rules
     recursive: bool = False  # also scan subfolders
     rules: list[Rule] = Field(min_length=1)
 
@@ -107,6 +111,11 @@ class AppConfig(BaseModel):
     output_root: str = Field(min_length=1)  # where collected files are copied
     udp: UdpSettings = Field(default_factory=UdpSettings)
     sources: list[Source] = []
+
+    @property
+    def enabled_sources(self) -> list[Source]:
+        """The sources to collect from: the ones not switched off in Settings."""
+        return [source for source in self.sources if source.enabled]
 
     @field_validator("sources")
     @classmethod
