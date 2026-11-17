@@ -119,6 +119,14 @@ def test_empty_state_when_there_are_no_runs(app, runs, make_window):
     window = make_window()
     assert window.pages.currentIndex() == EMPTY_PAGE
     assert window.empty_title.text() == "No runs yet"
+    assert window.empty_settings_button.isHidden()  # sources are set up: no hint needed
+
+
+def test_first_start_points_to_settings(app, runs, repository, tmp_path):
+    no_sources = SettingsService(tmp_path / "new" / "config.yaml", tmp_path / "out")
+    window = MainWindow(runs, CollectionService(repository), no_sources, tmp_path / "guide.md")
+    assert "Settings" in window.empty_text.text()
+    assert not window.empty_settings_button.isHidden()
 
 
 def test_newest_run_is_selected_and_shown(app, runs, make_window):
@@ -218,6 +226,8 @@ def test_no_sources_means_nothing_to_start(app, repository, run, tmp_path):
     dialog = CollectDialog(CollectionService(repository), run, AppConfig(output_root=str(tmp_path)))
     assert not dialog.start_button.isEnabled()
     assert "No source folders" in dialog.preview_summary.text()
+    dialog.settings_button.click()  # closes, so the main window can open Settings
+    assert dialog.wants_settings and dialog.result() == QDialog.DialogCode.Rejected
 
 
 def test_cancel_while_running_stops_and_still_shows_a_report(app, repository, run, config):

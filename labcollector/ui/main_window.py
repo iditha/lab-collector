@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         new_button = QPushButton("+  New run")
         new_button.setObjectName("primary")
         new_button.clicked.connect(self._new_run)
-        settings_button = QPushButton("Settings")
+        settings_button = QPushButton("Sources and settings")
         settings_button.setToolTip("Where files are collected from and copied to, and UDP.")
         settings_button.clicked.connect(self.open_settings)
 
@@ -124,11 +124,14 @@ class MainWindow(QMainWindow):
         self.empty_button = QPushButton("Create your first run")
         self.empty_button.setObjectName("primary")
         self.empty_button.clicked.connect(self._new_run)
+        self.empty_settings_button = QPushButton("Open Settings")  # when no source is set up
+        self.empty_settings_button.clicked.connect(self.open_settings)
 
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addStretch()
-        for widget in (self.empty_title, self.empty_text, self.empty_button):
+        widgets = (self.empty_title, self.empty_text, self.empty_settings_button, self.empty_button)
+        for widget in widgets:
             layout.addWidget(widget, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
         return page
@@ -218,12 +221,23 @@ class MainWindow(QMainWindow):
     def _show_empty(self) -> None:
         self._current = None
         searching = bool(self.search.text().strip())
+        needs_sources = not searching and self._has_no_sources()
         self.empty_title.setText("No matching runs" if searching else "No runs yet")
-        self.empty_text.setText(
-            "Try a different search." if searching else "Create a run, then collect its files."
-        )
+        if searching:
+            self.empty_text.setText("Try a different search.")
+        elif needs_sources:
+            self.empty_text.setText("First, choose the folders to collect from in Settings.")
+        else:
+            self.empty_text.setText("Create a run, then collect its files.")
+        self.empty_settings_button.setVisible(needs_sources)
         self.empty_button.setVisible(not searching)
         self.pages.setCurrentIndex(EMPTY_PAGE)
+
+    def _has_no_sources(self) -> bool:
+        try:
+            return not self._settings_service.load().enabled_sources
+        except ConfigError:
+            return False  # a broken config.yaml is explained when Settings or Collect opens
 
     def _new_run(self) -> None:
         dialog = RunDialog(self._run_service, parent=self)
@@ -246,7 +260,9 @@ class MainWindow(QMainWindow):
             return
         dialog = CollectDialog(self._collection_service, self._current, config, parent=self)
         dialog.exec()
-        if dialog.collection is not None:
+        if dialog.wants_settings:
+            self.open_settings()
+        elif dialog.collection is not None:
             self._show_collections(self._current)
             self.tabs.setCurrentIndex(FILES_TAB)
 
@@ -254,6 +270,8 @@ class MainWindow(QMainWindow):
         config = self.load_config()
         if config is not None:
             SettingsDialog(self._settings_service, config, parent=self).exec()
+            if self.pages.currentIndex() == EMPTY_PAGE:
+                self._show_empty()  # the hint about sources may no longer apply
 
     def load_config(self) -> AppConfig | None:
         """Read config.yaml. If it's broken, explain why and offer to fix it.

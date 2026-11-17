@@ -44,6 +44,7 @@ class CollectDialog(QDialog):
         self._thread: QThread | None = None
         self._worker: CollectionWorker | None = None
         self.collection: Collection | None = None
+        self.wants_settings = False  # True if closed with "Open Settings"
         self.setWindowTitle(f"Collect files: {run.name}")
         self.resize(760, 560)
 
@@ -69,13 +70,16 @@ class CollectDialog(QDialog):
         self.start_button.clicked.connect(self._start)
         cancel = QPushButton("Cancel")
         cancel.clicked.connect(self.reject)
+        self.settings_button = QPushButton("Open Settings")  # shown when there's no source
+        self.settings_button.clicked.connect(self._open_settings)
+        self.settings_button.hide()
 
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addWidget(QLabel(f"Files will be copied to: {self._config.output_root}"))
         layout.addWidget(self.preview_tree)
         layout.addWidget(self.preview_summary)
-        layout.addLayout(_button_row(cancel, self.start_button))
+        layout.addLayout(_button_row(self.settings_button, cancel, self.start_button))
         return page
 
     def _build_running_page(self) -> QWidget:
@@ -114,6 +118,7 @@ class CollectDialog(QDialog):
                 "Add or enable sources in Settings."
             )
             self.start_button.setEnabled(False)
+            self.settings_button.show()
             return
 
         plans = preview(self._config)
@@ -126,6 +131,11 @@ class CollectDialog(QDialog):
             rules = "1 rule" if short == 1 else f"{short} rules"
             text += f" {rules} found fewer files than expected (marked ⚠)."
         self.preview_summary.setText(text)
+
+    def _open_settings(self) -> None:
+        """Close, and let the main window open Settings (it owns the settings service)."""
+        self.wants_settings = True
+        self.reject()
 
     def _start(self) -> None:
         self.pages.setCurrentIndex(RUNNING)

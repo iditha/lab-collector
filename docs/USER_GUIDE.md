@@ -10,6 +10,9 @@ what is missing or broken. It also remembers each run's details and every collec
 
 ## 1. Create a run
 
+**The first time:** choose the folders to collect from in Settings (see section 6). Until a
+source is set up, the start page and the Collect window show an **Open Settings** button.
+
 A *run* is one experiment or test. Click **+ New run** (or press Ctrl+N).
 
 ![New run](images/new-run.png)
@@ -97,7 +100,7 @@ it in File Explorer. Click a file name in the report to open the file.
 
 ## 6. Settings
 
-Open **Settings** (bottom left, or File → Settings, Ctrl+,).
+Open Settings with **Sources and settings** (bottom left), or File → Settings (Ctrl+,).
 
 ![Settings](images/settings.png)
 
