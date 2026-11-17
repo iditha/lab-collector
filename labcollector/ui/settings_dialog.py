@@ -75,7 +75,7 @@ class SettingsDialog(QDialog):
 
         self.add_button = QPushButton("Add…")
         self.add_button.clicked.connect(self._add_source)
-        self.edit_button = QPushButton("Edit…")
+        self.edit_button = QPushButton("Edit source and rules…")
         self.edit_button.clicked.connect(self._edit_source)
         self.remove_button = QPushButton("Remove")
         self.remove_button.clicked.connect(self._remove_source)
@@ -84,7 +84,7 @@ class SettingsDialog(QDialog):
             buttons.addWidget(button)
         buttons.addStretch()
 
-        group = QGroupBox("Sources: folders to collect from (untick to skip)")
+        group = QGroupBox("Sources and their rules (untick a source to skip it)")
         row = QHBoxLayout(group)
         row.addWidget(self.source_list)
         row.addLayout(buttons)
@@ -150,7 +150,10 @@ class SettingsDialog(QDialog):
         self.source_list.blockSignals(True)  # adding ticks would otherwise fire itemChanged
         self.source_list.clear()
         for source in self._sources:
-            item = QListWidgetItem(f"{source['name']}\n{source['path']}")
+            # The rule count hints that each source has its own rules, edited with the source.
+            count = len(source["rules"])
+            rules = f"{count} rule" if count == 1 else f"{count} rules"
+            item = QListWidgetItem(f"{source['name']}  ·  {rules}\n{source['path']}")
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             checked = Qt.CheckState.Checked if source["enabled"] else Qt.CheckState.Unchecked
             item.setCheckState(checked)

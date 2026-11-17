@@ -263,6 +263,7 @@ def test_settings_dialog_shows_the_current_settings(app, settings, config):
     dialog = SettingsDialog(settings, config)
     assert dialog.output_root.text() == config.output_root
     assert dialog.source_list.count() == 1
+    assert dialog.source_list.item(0).text().startswith("Instrument  ·  1 rule\n")
     assert dialog.source_list.item(0).checkState() == Qt.CheckState.Checked
     assert not dialog.udp_enabled.isChecked()
 
