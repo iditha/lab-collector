@@ -74,6 +74,9 @@ def test_udp_send_and_receive():
         assert json.loads(receiver.recv(1024).decode("utf-8")) == {"run": "רן"}
 
 
-def test_udp_unknown_host_returns_error():
-    error = udp_notifier.send("no-such-host.invalid", 5005, {})
-    assert error and "couldn't send" in error
+def test_udp_send_failure_is_returned_not_raised(broken_network):
+    error = udp_notifier.send("192.168.1.50", 5005, {})
+    assert error == (
+        "couldn't send to 192.168.1.50:5005: "
+        "A socket operation was attempted to an unreachable network"
+    )
