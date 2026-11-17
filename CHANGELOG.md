@@ -3,6 +3,12 @@
 The version is set in `labcollector/__init__.py` (and `pyproject.toml`). It is shown in the
 window title and recorded with every collection, in its report and in the UDP message.
 
+## 1.1.0 (2026-11-17)
+
+- New users are guided to Settings: until a source folder is set up, the start page and the
+  Collect window show an **Open Settings** button.
+- The sidebar button is now called **Sources and settings**, to say what it's for.
+
 ## 1.0.0 (2026-11-17)
 
 First release.
