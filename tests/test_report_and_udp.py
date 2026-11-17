@@ -23,6 +23,7 @@ def copied(name):
         source_path=f"S:/{name}",
         dest_path=f"D:/out/x/logs/{name}",
         size=2048,
+        sha256="5e3a9f0c7b21",
     )
 
 
@@ -51,12 +52,14 @@ def test_html_escapes_names_and_links_files():
     assert "RUN &lt;1&gt;" in page and "RUN <1>" not in page
     assert "href='logs/a.log'" in page
     assert "2.0 KB" in page
+    assert "5e3a9f0c7b21" not in page  # the checksum is for programs, not for readers
 
 
 def test_json_report_is_valid():
     data = json.loads(report.to_json(collection(CollectionStatus.SUCCESS, [copied("a.log")]), RUN))
     assert data["collection"]["status"] == "success"
     assert data["files"][0]["status"] == "copied"
+    assert data["files"][0]["sha256"] == "5e3a9f0c7b21"
 
 
 def test_human_size():

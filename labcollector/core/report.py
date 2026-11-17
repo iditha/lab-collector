@@ -111,7 +111,7 @@ def to_html(collection: Collection, run: Run) -> str:
             )
             parts.append(
                 f"<h3>{_e(category)}</h3><table><tr><th>File</th><th>Source / rule</th>"
-                f"<th>Size</th><th>SHA-256</th></tr>{rows}</table>"
+                f"<th>Size</th></tr>{rows}</table>"
             )
 
     parts.append(_run_details(run, collection))
@@ -150,7 +150,7 @@ def _file_row(file: FileResult, collection_folder: str) -> str:
     return (
         f"<tr><td dir='auto'><a href='{_e(link)}'>{_e(name)}</a></td>"
         f"<td dir='auto'>{_e(file.source)} / {_e(file.rule)}</td>"
-        f"<td>{human_size(file.size)}</td><td class='hash'>{_e((file.sha256 or '')[:16])}</td></tr>"
+        f"<td>{human_size(file.size)}</td></tr>"
     )
 
 
@@ -214,7 +214,6 @@ th { color: #59636e; font-weight: 600; }
 .tiles td { border: 1px solid #d1d9e0; text-align: center; padding: 8px; width: 25%; }
 .num { font-size: 22px; font-weight: 600; }
 .bad { color: #a1261b; font-weight: 600; white-space: nowrap; }
-.hash { font-family: Consolas, monospace; color: #59636e; }
 .details th { width: 180px; }
 .text { white-space: pre-wrap; }
 """
