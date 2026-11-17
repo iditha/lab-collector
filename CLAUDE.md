@@ -18,6 +18,7 @@ readable code over clever or speculative code**.
 .venv\Scripts\python tools\make_demo_data.py --fixed  # demo where everything succeeds
 .venv\Scripts\python tools\udp_listener.py            # print received UDP messages (2nd PC)
 .venv\Scripts\python tools\lock_file.py <file>        # lock a file to demo "couldn't copy"
+.venv\Scripts\python tools\build.py                   # build dist\LabCollector\LabCollector.exe
 ```
 
 ## Architecture
@@ -26,7 +27,7 @@ Layers, with dependencies pointing down only:
 
 | Layer | Files | Rule |
 |---|---|---|
-| `ui/` | `main_window`, `run_form`, `details_tab`, `files_tab`, `history_tab`, `collect_dialog`, `report_view`, `worker`, `settings_dialog`, `source_dialog`, `helpers` (incl. the global error handler), `style.qss` | Shows data and calls services. No business logic. Never touches the database, the network or the config file directly. |
+| `ui/` | `main_window`, `run_form`, `details_tab`, `files_tab`, `history_tab`, `collect_dialog`, `report_view`, `worker`, `settings_dialog`, `source_dialog`, `guide_dialog`, `helpers` (incl. the global error handler), `style.qss` | Shows data and calls services. No business logic. Never touches the database, the network or the config file directly. |
 | `services/` | `run_service` (create/edit runs, `run.json`), `collection_service` (`preview()`, `collect()`, `history()`), `settings_service` (load/validate/save config.yaml, reset, UDP test) | Orchestrates core + infra for one use case. No Qt. |
 | `core/` | `matcher` (rule filter pipeline), `verifier` (size, SHA-256, content checks), `report` (HTML/JSON report) | Pure logic. No Qt, no database, no network. |
 | `infra/` | `config_store` (config.yaml), `repository` (SQLite: the only place with SQL), `udp_notifier` | Wraps one external thing each. |
@@ -77,15 +78,12 @@ Key behaviour:
 
 ## Status
 
-Done: project setup, config and rules, copy + verification, database and history, report,
-UDP, main window, run form, collect dialog, Files and History tabs, Settings (sources, rules,
-UDP test, enable/disable), app version tracking, database migrations, global error handler,
-broken-config handling.
+Version 1.0.0: all requirements in `docs/SPEC.md` are done, plus the delivery: the exe build
+(`tools/build.py`), `README.md`, `docs/ARCHITECTURE.md`, `docs/USER_GUIDE.md` (shown by
+Help → User guide; its screenshots are in `docs/images/`), `AI_USAGE.md`, `CHANGELOG.md`.
 
-Next:
-- **Delivery**: PyInstaller build, `README.md` (install and run), `docs/ARCHITECTURE.md`
-  (including "Extending the app"), `docs/USER_GUIDE.md` with screenshots and a Help menu entry,
-  `AI_USAGE.md`, `CHANGELOG.md`, git tag `v1.0.0`.
+When changing the app: update `CHANGELOG.md` and bump `__version__` (and `pyproject.toml`).
+Keep `docs/USER_GUIDE.md` and `docs/ARCHITECTURE.md` in step with the UI and the code.
 
 Known limitations: the collect preview lists folders on the UI thread, so an unreachable network
 share can freeze it briefly; likewise "Send test message" in Settings runs on the UI thread, so a
